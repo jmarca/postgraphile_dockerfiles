@@ -1,0 +1,95 @@
+#
+# based on sqitchers dockerfile.
+# switched to alpine, and include node
+#
+
+
+FROM postgres:alpine as build
+
+ARG SQITCH_VERSION=1.0.0
+
+
+WORKDIR /work
+RUN apk update \
+        && apk upgrade \
+        && apk add --no-cache --virtual .build-deps \
+        build-base \
+        cmake \
+        curl \
+        gcc \
+        git \
+        gnupg \
+        libpq \
+        make \
+        mariadb-client \
+        mariadb-dev \
+        perl \
+        perl-dev \
+        perl-utils \
+        sqlite \
+        sqlite-dev \
+        tar \
+        tzdata \
+        unixodbc-dev \
+        wget \
+        --repository https://dl-3.alpinelinux.org/alpine/edge/community \
+        --repository https://dl-3.alpinelinux.org/alpine/edge/testing
+
+# maybe missing some deps for sqitch build
+
+# Install cpanm and build dependencies.
+ENV PERL5LIB /work/local/lib/perl5
+
+RUN curl -LO https://raw.githubusercontent.com/miyagawa/cpanminus/master/cpanm
+RUN chmod +x cpanm
+RUN ./cpanm -L local App::cpanminus
+RUN ./cpanm -L local Module::Build
+RUN ./cpanm -L local ExtUtils::MakeMaker
+RUN ./cpanm -L /app TAP::Parser::SourceHandler::pgTAP
+RUN ./cpanm -L local --notest Menlo::CLI::Compat
+
+# RUN curl -sL --compressed https://git.io/cpm > cpm && chmod +x cpm \
+#     && ./cpm install -L local --verbose --no-test ExtUtils::MakeMaker \
+#     && ./cpm install -L local --verbose --no-test --with-recommends \
+#         --with-configure --cpanfile src/dist/cpanfile
+
+RUN curl -LO https://www.cpan.org/authors/id/D/DW/DWHEELER/App-Sqitch-v${SQITCH_VERSION}.tar.gz \
+    && mkdir src \
+    && tar -zxf App-Sqitch-v${SQITCH_VERSION}.tar.gz --strip-components 1 -C src
+
+WORKDIR /work/src
+ENV TZ="America/Los_Angeles"
+
+# copied from sqitch build
+# but removed --with firebird because apparently alpine doesn't have it
+
+# RUN ./Build installdeps -L local --notest
+RUN ../cpanm --installdeps --notest -L /work/local  --with-recommends --with-configure .
+RUN perl Build.PL --quiet --install_base /app --etcdir /etc/sqitch \
+    --config installman1dir= --config installsiteman1dir= --config installman3dir= --config installsiteman3dir= \
+        --with sqlite --with postgres --with odbc \
+        && ./Build test && ./Build bundle \
+        && rm -rf /app/man \
+        && find /app -name '*.pod' | grep -v sqitch | xargs rm -rf
+
+RUN ls -lR /app
+RUN ls /etc/sqitch
+
+
+
+FROM node:alpine as target
+LABEL maintainer="james@activimetrics.com"
+RUN apk update \
+        && apk upgrade \
+        && apk --no-cache add bash perl postgresql-client libpq ca-certificates\
+#         --repository https://dl-3.alpinelinux.org/alpine/edge/main \
+#         --repository https://dl-3.alpinelinux.org/alpine/edge/testing \
+        && mkdir /work \
+        && chown -R node:node /work
+
+COPY --from=build /app .
+COPY --from=build /etc/sqitch /etc/sqitch/
+
+ENV LESS=-R LC_ALL=C.UTF-8 LANG=C.UTF-8 PERL5LIB=/lib/perl5/
+USER node
+WORKDIR /work
