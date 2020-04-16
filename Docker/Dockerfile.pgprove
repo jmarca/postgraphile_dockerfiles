@@ -29,7 +29,7 @@ RUN ls -lR /app
 # RUN make install
 
 FROM node:alpine as target
-RUN apk --no-cache add bash perl \
+RUN apk --no-cache add bash perl postgresql-client \
 #        update \
 #         && apk upgrade \
 #         && apk --no-cache add \
@@ -40,6 +40,6 @@ RUN apk --no-cache add bash perl \
         && chown -R node:node /work
 
 COPY --from=build /app .
-ENV LESS=-R LC_ALL=C.UTF-8 LANG=C.UTF-8
+ENV LESS=-R LC_ALL=C.UTF-8 LANG=C.UTF-8 PERL5LIB=/lib/perl5/
 USER node
 WORKDIR /work
