@@ -76,17 +76,37 @@ RUN ls -lR /app
 RUN ls /etc/sqitch
 
 
+FROM postgres:alpine as build-pgprove
+
+WORKDIR /work
+
+RUN apk update \
+    && apk upgrade \
+    && apk add --no-cache --virtual .build-deps \
+        perl curl tar make gcc cmake build-base make perl-utils wget gnupg git perl-dev\
+        --repository https://dl-3.alpinelinux.org/alpine/edge/community \
+        --repository https://dl-3.alpinelinux.org/alpine/edge/testing
+
+WORKDIR /work/src
+
+RUN curl -LO https://raw.githubusercontent.com/miyagawa/cpanminus/master/cpanm
+RUN chmod +x cpanm
+RUN ./cpanm App::cpanminus
+RUN ./cpanm Module::Build
+RUN ./cpanm -L /app TAP::Parser::SourceHandler::pgTAP
+
 
 FROM node:alpine as target
 LABEL maintainer="james@activimetrics.com"
 RUN apk update \
         && apk upgrade \
-        && apk --no-cache add bash perl postgresql-client libpq ca-certificates\
+        && apk --no-cache add bash perl postgresql-client libpq ca-certificates tzdata \
 #         --repository https://dl-3.alpinelinux.org/alpine/edge/main \
 #         --repository https://dl-3.alpinelinux.org/alpine/edge/testing \
         && mkdir /work \
         && chown -R node:node /work
 
+COPY --from=build-pgprove /app .
 COPY --from=build /app .
 COPY --from=build /etc/sqitch /etc/sqitch/
 
