@@ -100,7 +100,7 @@ FROM node:alpine as target
 LABEL maintainer="james@activimetrics.com"
 RUN apk update \
         && apk upgrade \
-        && apk --no-cache add bash perl postgresql-client libpq ca-certificates tzdata \
+        && apk --no-cache add bash perl postgresql-client libpq ca-certificates tzdata git openssh-client \
 #         --repository https://dl-3.alpinelinux.org/alpine/edge/main \
 #         --repository https://dl-3.alpinelinux.org/alpine/edge/testing \
         && mkdir /work \
